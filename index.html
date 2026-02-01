@@ -58,7 +58,8 @@
       obj.timestamp = new Date().toISOString();
       obj.user_agent = navigator.userAgent;
 
-      await fetch(WEB_APP_URL, {
+      // Use text/plain to avoid CORS preflight hassles
+      return fetch(WEB_APP_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(obj)
@@ -123,31 +124,12 @@ First things first, rate ur stats on each sin. The truth is that i wanted this r
     // INIT jsPsych
     // =========================
     const jsPsych = initJsPsych({
-      display_element: "jspsych-target",
-      on_finish: async () => {
-        const row = { participant_id: getParticipantId() };
-
-        const radar = jsPsych.data.get().filter({ trial_tag: "sins_radar" }).last(1).values()[0] || {};
-        sins.forEach(s => row[s.id] = radar[s.id] ?? "");
-
-        const smr = jsPsych.data.get().filter({ trial_tag: "sun_moon_rising" }).last(1).values()[0];
-        if (smr && smr.response) {
-          row.sun = (smr.response.sun || []).join("; ");
-          row.moon = (smr.response.moon || []).join("; ");
-          row.rising = (smr.response.rising || []).join("; ");
-        }
-
-        const who = jsPsych.data.get().filter({ trial_tag: "who_are_you" }).last(1).values()[0];
-        if (who && who.response) {
-          row.who = who.response.who ?? "";
-        }
-
-        await postToSheets(row);
-      }
+      display_element: "jspsych-target"
+      // No global on_finish needed now; we post on each page.
     });
 
     // =========================
-    // PAGES (your / breaks)
+    // PAGES
     // =========================
 
     const page1_intro = {
@@ -168,7 +150,6 @@ This is my first time making a jsPsych survey and i will admit that i am very, v
       `,
       choices: ["Continue"]
     };
-
 
     // Radar page with Peraldus on same page
     const page2_radar_with_peraldus = {
@@ -205,17 +186,31 @@ This is my first time making a jsPsych survey and i will admit that i am very, v
         sins.forEach(s => document.getElementById(s.id).addEventListener("input", update));
         update();
 
-        document.getElementById("submitBtn").addEventListener("click", () => {
-          statusEl.textContent = "";
+        // SAVE HERE (robust)
+        document.getElementById("submitBtn").addEventListener("click", async () => {
+          statusEl.textContent = "Saving…";
+
           const payload = {};
           sins.forEach(s => payload[s.id] = Number(document.getElementById(s.id).value));
+
+          // Save in jsPsych dataset
           jsPsych.data.write({ trial_tag: "sins_radar", ...payload });
+
+          // Post to Google Sheets immediately
+          try {
+            await postToSheets({ stage: "radar", ...payload });
+            statusEl.textContent = "Saved.";
+          } catch (e) {
+            console.error("Radar save failed", e);
+            statusEl.textContent = "Save failed (check console).";
+          }
+
           jsPsych.finishTrial(payload);
         });
       }
     };
 
-    // Placeholder ENVY ACTIVITY page (separate; you can fill later)
+    // Placeholder ENVY ACTIVITY page
     const page3_envy_placeholder = {
       type: jsPsychHtmlButtonResponse,
       stimulus: `
@@ -232,12 +227,13 @@ ENVY ACTIVITY
       type: jsPsychSurveyMultiSelect,
       preamble: `
         <div class="wrap">
-      <div style="height:8px;"></div>
-      <img class="heroimg" src="ensor.png" alt="James Ensor, The Deadly Sins Dominated by Death">
-      <div class="small">
-        James Ensor, <em>The Deadly Sins Dominated by Death</em>, hand-coloured etching on Japanese paper, frontispiece to <em>The Deadly Sins</em>, ca. 1904
-      </div>
-    </div>
+          <div style="height:8px;"></div>
+          <img class="heroimg" src="ensor.png" alt="James Ensor, The Deadly Sins Dominated by Death">
+          <div class="small">
+            James Ensor, <em>The Deadly Sins Dominated by Death</em>, hand-coloured etching on Japanese paper, frontispiece to <em>The Deadly Sins</em>, ca. 1904
+          </div>
+
+          <div style="height: 10px;"></div>
 
 The question that i believe sparked the party theme. Slightly different than just raw stats - we want to know what your sun moon and rising are for the seven deadly sins. Those of us on hinge know that sun moon and rising are the three essential star signs you must know in order to bag a quirked up shawty. Like a troll on the bridge, or a sphinx at the gate, the answer to this riddle may grant you passage forward. Feel free to double up, even triple up, on sins! these should affect each other and may be different based on configuration. e.g., a pride sun, greed moon, lust rising might be very different than a lust sun, pride moon, greed rising. If you're not sure just imagine a beautiful astrology lover in your mind and use your intuition.  <p>
 
@@ -246,19 +242,31 @@ The question that i believe sparked the party theme. Slightly different than jus
 <b>RISING -</b> How people see and experience you, whether you mean it or not. It is the vibe you give off, the pattern people pick up on. <br>
         </div>
       `,
-     questions: [
-    { prompt: "SUN", name: "sun", options: SINS, required: false },
-    { prompt: "MOON", name: "moon", options: SINS, required: false },
-    { prompt: "RISING", name: "rising", options: SINS, required: false }
-  ],
-  button_label: "Continue",
-  data: { trial_tag: "sun_moon_rising" }
+      questions: [
+        { prompt: "SUN", name: "sun", options: SINS, required: false },
+        { prompt: "MOON", name: "moon", options: SINS, required: false },
+        { prompt: "RISING", name: "rising", options: SINS, required: false }
+      ],
+      button_label: "Continue",
+      data: { trial_tag: "sun_moon_rising" },
+      on_finish: async (data) => {
+        try {
+          await postToSheets({
+            stage: "sun_moon_rising",
+            sun: (data.response.sun || []).join("; "),
+            moon: (data.response.moon || []).join("; "),
+            rising: (data.response.rising || []).join("; ")
+          });
+        } catch (e) {
+          console.error("SMR save failed", e);
+        }
+      }
     };
 
     const page5_demogs = {
       type: jsPsychSurveyText,
       preamble: `
-        <div class="wrap";">
+        <div class="wrap">
 Who are you? Feel free to put your name for game + our records.
         </div>
       `,
@@ -266,7 +274,17 @@ Who are you? Feel free to put your name for game + our records.
         { prompt: "", name: "who", required: false, rows: 5, columns: 70 }
       ],
       button_label: "Finish",
-      data: { trial_tag: "who_are_you" }
+      data: { trial_tag: "who_are_you" },
+      on_finish: async (data) => {
+        try {
+          await postToSheets({
+            stage: "who",
+            who: data.response.who || ""
+          });
+        } catch (e) {
+          console.error("Who save failed", e);
+        }
+      }
     };
 
     const done = {
