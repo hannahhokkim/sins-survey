@@ -117,6 +117,8 @@
       moon: [],
       rising: [],
       who: "",
+      theory: "",
+      comments: "",
       // submission status
       lastSaveOk: false
     };
@@ -213,9 +215,9 @@
             <div style="height: 14px;"></div>
 
             <div style="white-space: pre-wrap;">
-Have been tasked yet again as the hermeneutic theorypilled factcel social scientist within the household with creating a survey to make you mingle and also collect information on you. Last time a few of you expressed discontent with <a href="https://harvard.az1.qualtrics.com/jfe/form/SV_b4rtiUbvYuTrr7w" target="_blank" rel="noopener noreferrer" style="color:#1a73e8; text-decoration:underline;">my bday survey</a> that our great failing american institute Harvard University may have access to your data and strange body facts. Your feedback has been taken into consideration. Now the only entity that will have your data other than the windsor household is sundar pichai the CEO of google via the extremely secure google sheets link that is attached to this survey. 
+Have been tasked yet again as the hermeneutic theorypilled factcel social scientist within the household with creating a survey to make you mingle and also collect information on you. Last time a few of you expressed discontent with <a href="https://harvard.az1.qualtrics.com/jfe/form/SV_b4rtiUbvYuTrr7w" target="_blank" rel="noopener noreferrer" style="color:#1a73e8; text-decoration:underline;">my bday survey</a> that our great failing american institute Harvard University may have access to your data and strange body facts. Your feedback has been taken into consideration. Now the only entity that will have your data other than the windsor household is sundar pichai the CEO of google via the extremely secure google sheets link that is attached to this survey.
 
-This is my first time making a jsPsych survey and i will admit that i am very, very, very afraid that it will fail :( this survey will have 3 parts. Please fill out as much or as little as you deem appropriate. The main section of this survey will be envy. We are about to get sooooo super covetous in da house tonight 
+This is my first time making a jsPsych survey and i will admit that i am very, very, very afraid that it will fail :( this survey will have 3 parts. Please fill out as much or as little as you deem appropriate. The main section of this survey will be envy. We are about to get sooooo super covetous in da house tonight
             </div>
 
             ${navHTML({ backDisabled: true, nextLabel: "Continue" })}
@@ -236,7 +238,7 @@ This is my first time making a jsPsych survey and i will admit that i am very, v
             <div style="height: 14px;"></div>
 
             <div style="white-space: pre-wrap;">
-First things first, rate your stats on each sin. 1 is low, 7 is high. 
+First things first, rate your stats on each sin. 1 is low, 7 is high.
             </div>
 
             <div style="height: 10px;"></div>
@@ -275,14 +277,13 @@ First things first, rate your stats on each sin. 1 is low, 7 is high.
           <div class="wrap">
             <h2 style="margin-top:0;">ENVY ! COVET ! WANT ! WANT ! WANT !</h2>
 
-            <div class="small" style="margin-bottom:10px;">
-Struggling with envy? <a href="https://www.catholictradition.org/Classics/guide33.htm" target="_blank" rel="noopener noreferrer" style="color:#1a73e8; text-decoration:underline;"> You’re not the only one.
-  </a> List some things you've been envious of in the past and see what the other party-goers agree on. I was too lazy to code this myself so enjoy this slido url based activity. link highly recommended that you do open. 
+            <div style="white-space: pre-wrap;">
+Struggling with envy? <a href="https://www.catholictradition.org/Classics/guide33.htm" target="_blank" rel="noopener noreferrer" style="color:#1a73e8; text-decoration:underline;">You’re not the only one.</a> List some things you've been envious of in the past and see what the other party-goers agree on. I was too lazy to code this myself so enjoy this slido url based activity. link highly recommended that you do open.
             </div>
 
-               <div class="small" style="margin-bottom:10px;">
-                        If the poll doesn’t load, open it here:
-              <a href="${esc(SLIDO_URL)}" target="_blank" rel="noopener noreferrer">Open Slido in a new tab</a>
+            <div class="small" style="margin-bottom:10px; margin-top:10px;">
+              If the poll doesn’t load, open it here:
+              <a href="${esc(SLIDO_URL)}" target="_blank" rel="noopener noreferrer" style="color:#1a73e8; text-decoration:underline;">Open Slido in a new tab</a>
             </div>
 
             <iframe
@@ -310,11 +311,11 @@ Struggling with envy? <a href="https://www.catholictradition.org/Classics/guide3
             <div style="height: 10px;"></div>
 
             <div style="white-space: pre-wrap;">
-The question that i believe sparked the party theme. Slightly different than just raw stats - we want to know what your sun moon and rising are for the seven deadly sins.
+The question that i believe sparked the party theme. Slightly different than just raw stats - we want to know what your sun moon and rising are for the seven deadly sins. Those of us on hinge know that sun moon and rising are the three essential star signs you must know in order to bag a quirked up shawty. Like a troll on the bridge, or a sphinx at the gate, the answer to this riddle may grant you passage forward. Feel free to double up, even triple up, on sins! these should affect each other and may be different based on configuration. e.g., a pride sun, greed moon, lust rising might be very different than a lust sun, pride moon, greed rising. If you're not sure just imagine a beautiful astrology lover in your mind and use your intuition.  <p>
 
-SUN - Your core, your impulse, the thing that sheds light on everything else.
-MOON - Your emotional self.
-RISING - How people see and experience you.
+<b>SUN -</b> Your core, your impulse, the thing that sheds light on everything else. If everything else fell away, this is what would still be there. <br>
+<b>MOON - </b>Your emotional self. This is how your sin shows up when you are tired, lonely, being emo. <br>
+<b>RISING -</b> How people see and experience you, whether you mean it or not. It is the vibe you give off, the pattern people pick up on. <br>
             </div>
 
             <div style="height: 14px;"></div>
@@ -351,6 +352,22 @@ RISING - How people see and experience you.
 
             <textarea id="whoBox" placeholder="(optional)">${esc(state.who)}</textarea>
 
+            <div style="height:16px;"></div>
+
+            <p>
+              <b>2.</b> do you have a theory on what differentiates lust/greed/gluttony? is it domain (e.g., strictly sex/money/food)? or can you be lustful about food and a glutton for coin?
+            </p>
+
+            <textarea id="theoryBox" placeholder="(optional)">${esc(state.theory)}</textarea>
+
+            <div style="height:16px;"></div>
+
+            <p>
+              <b>3.</b> open response -- comments, thoughts, anything you'd like to say. last time 18 people called me gay
+            </p>
+
+            <textarea id="commentsBox" placeholder="(optional)">${esc(state.comments)}</textarea>
+
             ${navHTML({ backDisabled: false, nextLabel: "Submit" })}
             <div id="submitErr" class="err" style="display:none;"></div>
             <div id="submitOk" class="ok" style="display:none;"></div>
@@ -359,6 +376,14 @@ RISING - How people see and experience you.
 
         document.getElementById("whoBox").addEventListener("input", (e) => {
           state.who = e.target.value;
+        });
+
+        document.getElementById("theoryBox").addEventListener("input", (e) => {
+          state.theory = e.target.value;
+        });
+
+        document.getElementById("commentsBox").addEventListener("input", (e) => {
+          state.comments = e.target.value;
         });
 
         wireNav({
@@ -384,13 +409,17 @@ RISING - How people see and experience you.
               moon: state.moon.join("; "),
               rising: state.rising.join("; "),
               who: state.who || "",
+              theory: state.theory || "",
+              comments: state.comments || "",
               slido_url: SLIDO_URL,
               all_trials_json: JSON.stringify({
                 radar: state.radar,
                 sun: state.sun,
                 moon: state.moon,
                 rising: state.rising,
-                who: state.who
+                who: state.who,
+                theory: state.theory,
+                comments: state.comments
               })
             };
 
@@ -550,6 +579,8 @@ RISING - How people see and experience you.
           moon: state.moon.join("; "),
           rising: state.rising.join("; "),
           who: state.who || "",
+          theory: state.theory || "",
+          comments: state.comments || "",
           lastSaveOk: state.lastSaveOk ? 1 : 0
         });
       }
