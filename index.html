@@ -11,7 +11,7 @@
   <!-- jsPsych core -->
   <script src="https://unpkg.com/jspsych@7.3.4"></script>
 
-  <!-- Plugins (we only really need html-keyboard-response for a "single-trial wizard") -->
+  <!-- Plugin used for a single "wizard" trial -->
   <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.3"></script>
 
   <!-- Chart.js -->
@@ -52,6 +52,7 @@
     .err { color: #b00020; font-weight: 700; margin-top: 10px; }
     .ok { color: #0b6b0b; font-weight: 700; margin-top: 10px; }
     a { color: inherit; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   </style>
 </head>
 
@@ -77,7 +78,8 @@
     const SLIDO_URL = "https://app.sli.do/event/mVxRttUV7vKSqaJcFkjaNV/polls";
 
     // =========================
-    // PARTICIPANT + DEDUPE
+    // PARTICIPANT ID
+    // (kept stable per browser; multiple submissions are allowed)
     // =========================
     function getParticipantId() {
       let pid = localStorage.getItem("participant_id");
@@ -86,14 +88,6 @@
         localStorage.setItem("participant_id", pid);
       }
       return pid;
-    }
-
-    function hasSubmitted() {
-      return localStorage.getItem("sins_survey_submitted") === "1";
-    }
-
-    function markSubmitted() {
-      localStorage.setItem("sins_survey_submitted", "1");
     }
 
     async function postToSheets(payload) {
@@ -108,34 +102,26 @@
         body: JSON.stringify(payload)
       });
 
-      // Apps Script often returns 200 even on some internal errors, but we still check ok.
       if (!res.ok) throw new Error("POST failed: " + res.status);
       return res;
     }
 
     // =========================
-    // SINGLE-TRIAL "WIZARD" STATE
+    // WIZARD STATE
     // =========================
     const state = {
       step: 0,
       // radar values stored as numbers 1-7, or null if not set
       radar: Object.fromEntries(SINS.map(s => [s.id, null])),
-      // multi-selects stored as arrays of sin labels
       sun: [],
       moon: [],
       rising: [],
       who: "",
-      submitted: false,
+      // submission status
+      lastSaveOk: false
     };
 
-    const steps = [
-      "intro",
-      "radar",
-      "slido",
-      "sun_moon_rising",
-      "who",
-      "done"
-    ];
+    const steps = ["intro", "radar", "slido", "sun_moon_rising", "who", "done"];
 
     // =========================
     // HTML HELPERS
@@ -194,7 +180,7 @@
       }).join("");
     }
 
-    function navHTML({ backDisabled, nextLabel, nextDisabled }) {
+    function navHTML({ backDisabled, nextLabel }) {
       return `
         <div class="nav">
           <div>
@@ -202,7 +188,7 @@
           </div>
           <div class="nav-right">
             <span id="status" class="small"></span>
-            <button id="nextBtn" type="button" ${nextDisabled ? "disabled" : ""}>${esc(nextLabel)}</button>
+            <button id="nextBtn" type="button">${esc(nextLabel)}</button>
           </div>
         </div>
       `;
@@ -218,19 +204,6 @@
       const root = document.getElementById("wizardRoot");
       if (!root) return;
 
-      // If already submitted, block the whole survey (client-side only).
-      // For real uniqueness, also enforce on Apps Script side using participant_id.
-      if (hasSubmitted() && !state.submitted && stepName !== "done") {
-        root.innerHTML = `
-          <div class="wrap">
-            <h2 style="margin-top:0;">Already submitted</h2>
-            <p>This browser already submitted a response. If you think this is wrong, you probably cleared storage or switched devices.</p>
-            <p class="small">Participant ID: <code>${esc(getParticipantId())}</code></p>
-          </div>
-        `;
-        return;
-      }
-
       if (stepName === "intro") {
         root.innerHTML = `
           <div class="wrap">
@@ -245,7 +218,7 @@ Have been tasked yet again as the hermeneutic theorypilled factcel social scient
 This is my first time making a jsPsych survey and i will admit that i am very, very, very afraid that it will fail :( this survey will have 3 parts. Please fill out as much or as little as you deem appropriate. The main section of this survey will be envy. We are about to get sooooo super covetous in da house tonight 
             </div>
 
-            ${navHTML({ backDisabled: true, nextLabel: "Continue", nextDisabled: false })}
+            ${navHTML({ backDisabled: true, nextLabel: "Continue" })}
           </div>
         `;
         wireNav();
@@ -276,7 +249,7 @@ First things first, rate ur stats on each sin. 1 is low, 7 is high.
 
             <div id="radarErr" class="err" style="display:none;">Please set all seven values before continuing.</div>
 
-            ${navHTML({ backDisabled: false, nextLabel: "Continue", nextDisabled: false })}
+            ${navHTML({ backDisabled: false, nextLabel: "Continue" })}
           </div>
         `;
 
@@ -284,7 +257,6 @@ First things first, rate ur stats on each sin. 1 is low, 7 is high.
         wireRadarInputs();
         wireNav({
           onNext: () => {
-            // Require all 7 set (you can loosen this if you actually want optional).
             const allSet = SINS.every(s => Number.isInteger(state.radar[s.id]));
             const err = document.getElementById("radarErr");
             if (!allSet) {
@@ -319,7 +291,7 @@ First things first, rate ur stats on each sin. 1 is low, 7 is high.
               Note: going Back will re-render this page. Slido state may not persist.
             </div>
 
-            ${navHTML({ backDisabled: false, nextLabel: "Continue", nextDisabled: false })}
+            ${navHTML({ backDisabled: false, nextLabel: "Continue" })}
           </div>
         `;
         wireNav();
@@ -361,7 +333,7 @@ RISING - How people see and experience you.
               ${sinCheckboxGroup("rising", state.rising)}
             </div>
 
-            ${navHTML({ backDisabled: false, nextLabel: "Continue", nextDisabled: false })}
+            ${navHTML({ backDisabled: false, nextLabel: "Continue" })}
           </div>
         `;
 
@@ -378,7 +350,7 @@ RISING - How people see and experience you.
 
             <textarea id="whoBox" placeholder="(optional)">${esc(state.who)}</textarea>
 
-            ${navHTML({ backDisabled: false, nextLabel: "Submit", nextDisabled: false })}
+            ${navHTML({ backDisabled: false, nextLabel: "Submit" })}
             <div id="submitErr" class="err" style="display:none;"></div>
             <div id="submitOk" class="ok" style="display:none;"></div>
           </div>
@@ -390,14 +362,6 @@ RISING - How people see and experience you.
 
         wireNav({
           onNext: async () => {
-            // Submit exactly once per participant (client-side).
-            if (hasSubmitted()) {
-              const err = document.getElementById("submitErr");
-              err.style.display = "block";
-              err.textContent = "This browser already submitted a response.";
-              return false;
-            }
-
             const status = document.getElementById("status");
             const err = document.getElementById("submitErr");
             const ok = document.getElementById("submitOk");
@@ -419,6 +383,7 @@ RISING - How people see and experience you.
               moon: state.moon.join("; "),
               rising: state.rising.join("; "),
               who: state.who || "",
+              slido_url: SLIDO_URL,
               all_trials_json: JSON.stringify({
                 radar: state.radar,
                 sun: state.sun,
@@ -430,18 +395,18 @@ RISING - How people see and experience you.
 
             try {
               await postToSheets(payload);
-              markSubmitted();
-              state.submitted = true;
               status.textContent = "Saved.";
               ok.style.display = "block";
               ok.textContent = "Saved. Thanks.";
+              state.lastSaveOk = true;
               return true;
             } catch (e) {
               console.error(e);
               status.textContent = "";
               err.style.display = "block";
               err.textContent = "Save failed. Check console / Apps Script logs.";
-              return false;
+              state.lastSaveOk = false;
+              return false; // keep them on this page
             }
           }
         });
@@ -454,7 +419,8 @@ RISING - How people see and experience you.
           <div class="wrap">
             <h2 style="margin-top:0;">Done</h2>
             <p>You can close this tab.</p>
-            <p class="small">Participant ID: <code>${esc(getParticipantId())}</code></p>
+            <p class="small">Participant ID (browser): <code>${esc(getParticipantId())}</code></p>
+            <p class="small">If you refill the survey, it will create another row in the sheet.</p>
           </div>
         `;
         return;
@@ -479,7 +445,6 @@ RISING - How people see and experience you.
 
       if (nextBtn) {
         nextBtn.addEventListener("click", async () => {
-          // optional per-step validation hook
           if (opts.onNext) {
             const ok = await opts.onNext();
             if (!ok) return;
@@ -496,14 +461,13 @@ RISING - How people see and experience you.
       const ctx = document.getElementById("radarChart");
       if (!ctx) return;
 
-      const dataArr = SINS.map(s => state.radar[s.id]); // nulls allowed
       chart = new Chart(ctx, {
         type: "radar",
         data: {
           labels: SINS.map(s => s.label),
           datasets: [{
             label: "You",
-            data: dataArr,
+            data: SINS.map(s => state.radar[s.id]), // nulls allowed
             fill: true
           }]
         },
@@ -543,7 +507,6 @@ RISING - How people see and experience you.
           });
         });
 
-        // ensure the label display matches current state on render
         const valEl = document.getElementById(`${s.id}_val`);
         if (valEl) valEl.textContent = (state.radar[s.id] == null) ? "" : String(state.radar[s.id]);
       });
@@ -574,22 +537,19 @@ RISING - How people see and experience you.
     const wizardTrial = {
       type: jsPsychHtmlKeyboardResponse,
       choices: "NO_KEYS",
-      stimulus: `
-        <div id="wizardRoot"></div>
-      `,
+      stimulus: `<div id="wizardRoot"></div>`,
       on_load: () => {
         render();
       },
       on_finish: () => {
-        // write whatever we have into jsPsych data as well (even though we only submit once)
         jsPsych.data.write({
           participant_id: getParticipantId(),
-          submitted_flag: hasSubmitted() ? 1 : 0,
           radar: JSON.stringify(state.radar),
           sun: state.sun.join("; "),
           moon: state.moon.join("; "),
           rising: state.rising.join("; "),
-          who: state.who || ""
+          who: state.who || "",
+          lastSaveOk: state.lastSaveOk ? 1 : 0
         });
       }
     };
