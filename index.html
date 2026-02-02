@@ -213,7 +213,7 @@
             <div style="height: 14px;"></div>
 
             <div style="white-space: pre-wrap;">
-Have been tasked yet again as the hermeneutic theorypilled factcel social scientist within the household with creating a survey to make you mingle and also collect information on you. Last time a few of you expressed discontent with my bday survey that our great failing american institute Harvard University may have access to your data and strange body facts. Your feedback has been taken into consideration. Now the only entity that will have your data other than the windsor household is sundar pichai the CEO of google via the extremely secure google sheets link that is attached to this survey. 
+Have been tasked yet again as the hermeneutic theorypilled factcel social scientist within the household with creating a survey to make you mingle and also collect information on you. Last time a few of you expressed discontent with <a href="https://harvard.az1.qualtrics.com/jfe/form/SV_b4rtiUbvYuTrr7w" target="_blank" rel="noopener noreferrer">my bday survey</a> that our great failing american institute Harvard University may have access to your data and strange body facts. Your feedback has been taken into consideration. Now the only entity that will have your data other than the windsor household is sundar pichai the CEO of google via the extremely secure google sheets link that is attached to this survey. 
 
 This is my first time making a jsPsych survey and i will admit that i am very, very, very afraid that it will fail :( this survey will have 3 parts. Please fill out as much or as little as you deem appropriate. The main section of this survey will be envy. We are about to get sooooo super covetous in da house tonight 
             </div>
@@ -273,10 +273,15 @@ First things first, rate ur stats on each sin. 1 is low, 7 is high.
       if (stepName === "slido") {
         root.innerHTML = `
           <div class="wrap">
-            <h2 style="margin-top:0;">Live envy poll</h2>
+            <h2 style="margin-top:0;">ENVY ! COVET ! WANT ! WANT ! WANT !</h2>
 
             <div class="small" style="margin-bottom:10px;">
-              If the poll doesn’t load, open it here:
+Struggling with envy? <a href="https://www.catholictradition.org/Classics/guide33.htm" target="_blank" rel="noopener noreferrer"> You’re not the only one.
+  </a> List some things you've been envious of in the past and see what the other party-goers agree on. I was too lazy to code this myself so enjoy this slido url based activity. link highly recommended that you do open. 
+            </div>
+
+               <div class="small" style="margin-bottom:10px;">
+                        If the poll doesn’t load, open it here:
               <a href="${esc(SLIDO_URL)}" target="_blank" rel="noopener noreferrer">Open Slido in a new tab</a>
             </div>
 
@@ -286,10 +291,6 @@ First things first, rate ur stats on each sin. 1 is low, 7 is high.
               allow="clipboard-write; fullscreen"
               loading="lazy"
             ></iframe>
-
-            <div class="small" style="margin-top:10px;">
-              Note: going Back will re-render this page. Slido state may not persist.
-            </div>
 
             ${navHTML({ backDisabled: false, nextLabel: "Continue" })}
           </div>
