@@ -210,18 +210,47 @@ This is my first time making a jsPsych survey and i will admit that i am very, v
       }
     };
 
-    // Placeholder ENVY ACTIVITY page
-    const page3_envy_placeholder = {
-      type: jsPsychHtmlButtonResponse,
-      stimulus: `
-        <div class="wrap" style="white-space: pre-wrap;">
-ENVY ACTIVITY 
+   const SLIDO_URL = "https://app.sli.do/event/mVxRttUV7vKSqaJcFkjaNV/polls";
+// If this fails, try without /polls
 
-[placeholder]
-        </div>
-      `,
-      choices: ["Continue"]
-    };
+const page3_slido_embed = {
+  type: jsPsychHtmlKeyboardResponse,
+  choices: "NO_KEYS",
+  stimulus: `
+    <div class="wrap">
+      <h2 style="margin-top:0;">Live envy poll</h2>
+
+      <div class="small" style="margin-bottom:10px;">
+        If the poll doesn’t load, open it here:
+        <a href="${SLIDO_URL}" target="_blank" rel="noopener noreferrer">
+          Open Slido in a new tab
+        </a>
+      </div>
+
+      <iframe
+        src="${SLIDO_URL}"
+        style="width:100%; min-height:720px; border:0; border-radius:12px;"
+        allow="clipboard-write; fullscreen"
+        loading="lazy"
+      ></iframe>
+
+      <div style="margin-top:16px; display:flex; justify-content:flex-end;">
+        <button id="continueBtn" type="button">Continue</button>
+      </div>
+    </div>
+  `,
+  on_load: () => {
+    document
+      .getElementById("continueBtn")
+      .addEventListener("click", () => {
+        jsPsych.finishTrial({
+          trial_tag: "slido_embed",
+          slido_url: SLIDO_URL
+        });
+      });
+  }
+};
+
 
     const page4_sun_moon_rising = {
       type: jsPsychSurveyMultiSelect,
@@ -301,7 +330,7 @@ Who are you? Feel free to put your name for game + our records.
     jsPsych.run([
       page1_intro,
       page2_radar_with_peraldus,
-      page3_envy_placeholder,
+  page3_slido_embed,
       page4_sun_moon_rising,
       page5_demogs,
       done
