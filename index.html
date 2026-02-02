@@ -113,9 +113,12 @@
       step: 0,
       // radar values stored as numbers 1-7, or null if not set
       radar: Object.fromEntries(SINS.map(s => [s.id, null])),
-      sun: [],
-      moon: [],
-      rising: [],
+
+      // single-choice now (not arrays)
+      sun: "",
+      moon: "",
+      rising: "",
+
       who: "",
       theory: "",
       comments: "",
@@ -137,18 +140,18 @@
         .replaceAll("'","&#039;");
     }
 
-    function sinCheckboxGroup(name, selectedArr) {
+    function sinRadioGroup(name, selectedValue) {
       const opts = SINS.map(s => {
-        const checked = selectedArr.includes(s.label) ? "checked" : "";
+        const checked = (selectedValue === s.label) ? "checked" : "";
         const id = `${name}_${s.id}`;
         return `
           <label class="chip" for="${id}">
-            <input id="${id}" type="checkbox" name="${name}" value="${esc(s.label)}" ${checked}>
+            <input id="${id}" type="radio" name="${name}" value="${esc(s.label)}" ${checked}>
             ${esc(s.label)}
           </label>
         `;
       }).join("");
-      return `<div class="choices">${opts}</div>`;
+      return `<div class="choices" role="radiogroup" aria-label="${esc(name)}">${opts}</div>`;
     }
 
     function radarRowsHTML() {
@@ -249,26 +252,14 @@ First things first, rate your stats on each sin. 1 is low, 7 is high.
 
             ${radarRowsHTML()}
 
-            <div id="radarErr" class="err" style="display:none;">Please set all seven values before continuing.</div>
-
             ${navHTML({ backDisabled: false, nextLabel: "Continue" })}
           </div>
         `;
 
         initRadarChart();
         wireRadarInputs();
-        wireNav({
-          onNext: () => {
-            const allSet = SINS.every(s => Number.isInteger(state.radar[s.id]));
-            const err = document.getElementById("radarErr");
-            if (!allSet) {
-              err.style.display = "block";
-              return false;
-            }
-            err.style.display = "none";
-            return true;
-          }
-        });
+        // No validation: radar answers are optional now
+        wireNav();
         return;
       }
 
@@ -311,7 +302,7 @@ Struggling with envy? <a href="https://www.catholictradition.org/Classics/guide3
             <div style="height: 10px;"></div>
 
             <div style="white-space: pre-wrap;">
-The question that i believe sparked the party theme. Slightly different than just raw stats - we want to know what your sun moon and rising are for the seven deadly sins. Those of us on hinge know that sun moon and rising are the three essential star signs you must know in order to bag a quirked up shawty. Like a troll on the bridge, or a sphinx at the gate, the answer to this riddle may grant you passage forward. Feel free to double up, even triple up, on sins! these should affect each other and may be different based on configuration. e.g., a pride sun, greed moon, lust rising might be very different than a lust sun, pride moon, greed rising. If you're not sure just imagine a beautiful astrology lover in your mind and use your intuition.  <p>
+The question that i believe sparked the party theme. Slightly different than just raw stats - we want to know what your sun moon and rising are for the seven deadly sins. Those of us on hinge know that sun moon and rising are the three essential star signs you must know in order to bag a quirked up shawty. Like a troll on the bridge, or a sphinx at the gate, the answer to this riddle may grant you passage forward. Feel free to double up, even triple up, on sins! these should effect each other and may be different based on configuration. e.g., a pride sun, greed moon, lust rising might be very different than a lust sun, pride moon, greed rising. If you're not sure just imagine a beautiful astrology lover in your mind and use your intuition.  <p>
 
 <b>SUN -</b> Your core, your impulse, the thing that sheds light on everything else. If everything else fell away, this is what would still be there. <br>
 <b>MOON - </b>Your emotional self. This is how your sin shows up when you are tired, lonely, being emo. <br>
@@ -322,17 +313,17 @@ The question that i believe sparked the party theme. Slightly different than jus
 
             <div class="row">
               <div class="lab"><span>SUN</span></div>
-              ${sinCheckboxGroup("sun", state.sun)}
+              ${sinRadioGroup("sun", state.sun)}
             </div>
 
             <div class="row">
               <div class="lab"><span>MOON</span></div>
-              ${sinCheckboxGroup("moon", state.moon)}
+              ${sinRadioGroup("moon", state.moon)}
             </div>
 
             <div class="row">
               <div class="lab"><span>RISING</span></div>
-              ${sinCheckboxGroup("rising", state.rising)}
+              ${sinRadioGroup("rising", state.rising)}
             </div>
 
             ${navHTML({ backDisabled: false, nextLabel: "Continue" })}
@@ -405,9 +396,9 @@ The question that i believe sparked the party theme. Slightly different than jus
               gluttony: state.radar.gluttony,
               wrath: state.radar.wrath,
               sloth: state.radar.sloth,
-              sun: state.sun.join("; "),
-              moon: state.moon.join("; "),
-              rising: state.rising.join("; "),
+              sun: state.sun || "",
+              moon: state.moon || "",
+              rising: state.rising || "",
               who: state.who || "",
               theory: state.theory || "",
               comments: state.comments || "",
@@ -436,7 +427,7 @@ The question that i believe sparked the party theme. Slightly different than jus
               err.style.display = "block";
               err.textContent = "Save failed. Check console / Apps Script logs.";
               state.lastSaveOk = false;
-              return false; // keep them on this page
+              return false;
             }
           }
         });
@@ -546,12 +537,10 @@ The question that i believe sparked the party theme. Slightly different than jus
 
     function wireSMR() {
       ["sun", "moon", "rising"].forEach(group => {
-        const boxes = document.querySelectorAll(`input[type="checkbox"][name="${group}"]`);
-        boxes.forEach(b => {
-          b.addEventListener("change", () => {
-            const chosen = Array.from(document.querySelectorAll(`input[type="checkbox"][name="${group}"]:checked`))
-              .map(x => x.value);
-            state[group] = chosen;
+        const radios = document.querySelectorAll(`input[type="radio"][name="${group}"]`);
+        radios.forEach(r => {
+          r.addEventListener("change", (e) => {
+            state[group] = e.target.value;
           });
         });
       });
@@ -575,9 +564,9 @@ The question that i believe sparked the party theme. Slightly different than jus
         jsPsych.data.write({
           participant_id: getParticipantId(),
           radar: JSON.stringify(state.radar),
-          sun: state.sun.join("; "),
-          moon: state.moon.join("; "),
-          rising: state.rising.join("; "),
+          sun: state.sun || "",
+          moon: state.moon || "",
+          rising: state.rising || "",
           who: state.who || "",
           theory: state.theory || "",
           comments: state.comments || "",
