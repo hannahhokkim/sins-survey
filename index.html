@@ -11,11 +11,8 @@
   <!-- jsPsych core -->
   <script src="https://unpkg.com/jspsych@7.3.4"></script>
 
-  <!-- Plugins -->
-  <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.3"></script>
+  <!-- Plugins (we only really need html-keyboard-response for a "single-trial wizard") -->
   <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.3"></script>
-  <script src="https://unpkg.com/@jspsych/plugin-survey-multi-select@1.1.3"></script>
-  <script src="https://unpkg.com/@jspsych/plugin-survey-text@1.1.3"></script>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -25,12 +22,36 @@
     .wrap { max-width: 820px; margin: 24px auto; padding: 0 8px; }
     .small { opacity: .75; font-size: 13px; line-height: 1.35; }
     .heroimg { width: 100%; max-width: 760px; height: auto; border-radius: 12px; display: block; margin: 14px auto; }
-    .top { display:flex; flex-direction:column; align-items:center; gap:10px; }
     canvas { max-width:520px; width:100%; height:auto; }
-    .row { margin: 12px 0; }
-    .lab { display:flex; justify-content:space-between; gap:10px; font-size:14px; font-weight:600; }
-    input[type="range"] { width:100%; }
-    button { padding:10px 14px; border-radius:10px; border:1px solid rgba(0,0,0,0.25); cursor:pointer; font-weight:700; }
+    .row { margin: 12px 0; padding: 10px 12px; border: 1px solid rgba(0,0,0,0.12); border-radius: 12px; }
+    .lab { display:flex; justify-content:space-between; gap:10px; font-size:14px; font-weight:700; }
+    .choices { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+    .chip {
+      display:inline-flex; align-items:center; gap:6px;
+      border: 1px solid rgba(0,0,0,0.20);
+      border-radius: 999px;
+      padding: 6px 10px;
+      cursor: pointer;
+      user-select: none;
+      font-weight: 650;
+      font-size: 13px;
+    }
+    .chip input { cursor:pointer; }
+    button {
+      padding:10px 14px;
+      border-radius:10px;
+      border:1px solid rgba(0,0,0,0.25);
+      cursor:pointer;
+      font-weight:800;
+      background: #fff;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .nav { margin-top: 16px; display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .nav-right { display:flex; justify-content:flex-end; gap:10px; align-items:center; }
+    textarea { width:100%; min-height: 120px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.2); }
+    .err { color: #b00020; font-weight: 700; margin-top: 10px; }
+    .ok { color: #0b6b0b; font-weight: 700; margin-top: 10px; }
+    a { color: inherit; }
   </style>
 </head>
 
@@ -42,34 +63,8 @@
     // CONFIG
     // =========================
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzlq133iOhEJuB3zEyPgX73q2MhGAoAJD9XEOhYQQbmrcSVuQZk9E7-hfwP34cbadJIiQ/exec";
-    const SINS = ["Pride","Greed","Lust","Envy","Gluttony","Wrath","Sloth"];
 
-    function getParticipantId() {
-      let pid = localStorage.getItem("participant_id");
-      if (!pid) {
-        pid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2));
-        localStorage.setItem("participant_id", pid);
-      }
-      return pid;
-    }
-
-    async function postToSheets(obj) {
-      obj.participant_id = getParticipantId();
-      obj.timestamp = new Date().toISOString();
-      obj.user_agent = navigator.userAgent;
-
-      // Use text/plain to avoid CORS preflight hassles
-      return fetch(WEB_APP_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(obj)
-      });
-    }
-
-    // =========================
-    // RADAR
-    // =========================
-    const sins = [
+    const SINS = [
       { id: "pride", label: "Pride" },
       { id: "greed", label: "Greed" },
       { id: "lust", label: "Lust" },
@@ -79,262 +74,527 @@
       { id: "sloth", label: "Sloth" },
     ];
 
-    function buildRadarHTML(initial = 4) {
-      const sliders = sins.map(s => `
-        <div class="row">
-          <div class="lab">
-            <label for="${s.id}">${s.label}</label>
-            <span id="${s.id}_val">${initial}</span>
-          </div>
-          <input id="${s.id}" type="range" min="1" max="7" step="1" value="${initial}">
-        </div>
-      `).join("");
+    const SLIDO_URL = "https://app.sli.do/event/mVxRttUV7vKSqaJcFkjaNV/polls";
 
+    // =========================
+    // PARTICIPANT + DEDUPE
+    // =========================
+    function getParticipantId() {
+      let pid = localStorage.getItem("participant_id");
+      if (!pid) {
+        pid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2));
+        localStorage.setItem("participant_id", pid);
+      }
+      return pid;
+    }
+
+    function hasSubmitted() {
+      return localStorage.getItem("sins_survey_submitted") === "1";
+    }
+
+    function markSubmitted() {
+      localStorage.setItem("sins_survey_submitted", "1");
+    }
+
+    async function postToSheets(payload) {
+      payload.participant_id = getParticipantId();
+      payload.timestamp = new Date().toISOString();
+      payload.user_agent = navigator.userAgent;
+
+      // Use text/plain to avoid CORS preflight hassles
+      const res = await fetch(WEB_APP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+
+      // Apps Script often returns 200 even on some internal errors, but we still check ok.
+      if (!res.ok) throw new Error("POST failed: " + res.status);
+      return res;
+    }
+
+    // =========================
+    // SINGLE-TRIAL "WIZARD" STATE
+    // =========================
+    const state = {
+      step: 0,
+      // radar values stored as numbers 1-7, or null if not set
+      radar: Object.fromEntries(SINS.map(s => [s.id, null])),
+      // multi-selects stored as arrays of sin labels
+      sun: [],
+      moon: [],
+      rising: [],
+      who: "",
+      submitted: false,
+    };
+
+    const steps = [
+      "intro",
+      "radar",
+      "slido",
+      "sun_moon_rising",
+      "who",
+      "done"
+    ];
+
+    // =========================
+    // HTML HELPERS
+    // =========================
+    function esc(s) {
+      return String(s)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function sinCheckboxGroup(name, selectedArr) {
+      const opts = SINS.map(s => {
+        const checked = selectedArr.includes(s.label) ? "checked" : "";
+        const id = `${name}_${s.id}`;
+        return `
+          <label class="chip" for="${id}">
+            <input id="${id}" type="checkbox" name="${name}" value="${esc(s.label)}" ${checked}>
+            ${esc(s.label)}
+          </label>
+        `;
+      }).join("");
+      return `<div class="choices">${opts}</div>`;
+    }
+
+    function radarRowsHTML() {
+      // Radio buttons allow truly "unset" (none selected) at load.
+      return SINS.map(s => {
+        const val = state.radar[s.id];
+        const display = (val == null) ? "" : String(val);
+
+        const radios = [1,2,3,4,5,6,7].map(n => {
+          const id = `${s.id}_r_${n}`;
+          const checked = (val === n) ? "checked" : "";
+          return `
+            <label class="chip" for="${id}">
+              <input type="radio" id="${id}" name="${s.id}" value="${n}" ${checked}>
+              ${n}
+            </label>
+          `;
+        }).join("");
+
+        return `
+          <div class="row">
+            <div class="lab">
+              <span>${esc(s.label)}</span>
+              <span id="${s.id}_val">${esc(display)}</span>
+            </div>
+            <div class="choices" role="radiogroup" aria-label="${esc(s.label)}">
+              ${radios}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function navHTML({ backDisabled, nextLabel, nextDisabled }) {
       return `
-        <div class="wrap">
-
-          <h2 style="margin-top:0;">SINSTATS</h2>
-
-          <img class="heroimg" src="Peraldus.png" alt="Peraldus Treatise on the Vices">
-          <div class="small">Summa de vitiis or "Treatise on the Vices" by the 13th-century Dominican friar William Peraldus</div>
-
-          <div style="height: 14px;"></div>
-
-          <div style="white-space: pre-wrap;">
-First things first, rate ur stats on each sin. The truth is that i wanted this radial in real time which is why the task is on jsPsych and not qualtrics. 1 is low, 7 is high.
+        <div class="nav">
+          <div>
+            <button id="backBtn" type="button" ${backDisabled ? "disabled" : ""}>Back</button>
           </div>
-
-          <div style="height: 10px;"></div>
-
-          <div class="top">
-            <canvas id="radarChart" width="400" height="400"></canvas>
-          </div>
-
-          ${sliders}
-
-          <div style="margin-top: 16px; display:flex; justify-content:flex-end; gap:10px; align-items:center;">
+          <div class="nav-right">
             <span id="status" class="small"></span>
-            <button id="submitBtn" type="button">Continue</button>
+            <button id="nextBtn" type="button" ${nextDisabled ? "disabled" : ""}>${esc(nextLabel)}</button>
           </div>
         </div>
       `;
     }
 
     // =========================
-    // INIT jsPsych
+    // RENDER STEPS
     // =========================
-    const jsPsych = initJsPsych({
-      display_element: "jspsych-target"
-      // No global on_finish needed now; we post on each page.
-    });
+    let chart = null;
 
-    // =========================
-    // PAGES
-    // =========================
+    function render() {
+      const stepName = steps[state.step];
+      const root = document.getElementById("wizardRoot");
+      if (!root) return;
 
-    const page1_intro = {
-      type: jsPsychHtmlButtonResponse,
-      stimulus: `
-        <div class="wrap">
-          <img class="heroimg" src="Yates.png" alt="Yates Thompson manuscript">
-          <div class="small">Personifications of the Seven Deadly Sins in a fourteenth-century manuscript (British Library, Yates Thompson MS. 21, f. 165</div>
+      // If already submitted, block the whole survey (client-side only).
+      // For real uniqueness, also enforce on Apps Script side using participant_id.
+      if (hasSubmitted() && !state.submitted && stepName !== "done") {
+        root.innerHTML = `
+          <div class="wrap">
+            <h2 style="margin-top:0;">Already submitted</h2>
+            <p>This browser already submitted a response. If you think this is wrong, you probably cleared storage or switched devices.</p>
+            <p class="small">Participant ID: <code>${esc(getParticipantId())}</code></p>
+          </div>
+        `;
+        return;
+      }
 
-          <div style="height: 14px;"></div>
+      if (stepName === "intro") {
+        root.innerHTML = `
+          <div class="wrap">
+            <img class="heroimg" src="Yates.png" alt="Yates Thompson manuscript">
+            <div class="small">Personifications of the Seven Deadly Sins in a fourteenth-century manuscript (British Library, Yates Thompson MS. 21, f. 165</div>
 
-          <div style="white-space: pre-wrap;">
+            <div style="height: 14px;"></div>
+
+            <div style="white-space: pre-wrap;">
 Have been tasked yet again as the hermeneutic theorypilled factcel social scientist within the household with creating a survey to make you mingle and also collect information on you. Last time a few of you expressed discontent with my bday survey that our great failing american institute Harvard University may have access to your data and strange body facts. Your feedback has been taken into consideration. Now the only entity that will have your data other than the windsor household is sundar pichai the CEO of google via the extremely secure google sheets link that is attached to this survey. 
 
 This is my first time making a jsPsych survey and i will admit that i am very, very, very afraid that it will fail :( this survey will have 3 parts. Please fill out as much or as little as you deem appropriate. The main section of this survey will be envy. We are about to get sooooo super covetous in da house tonight 
+            </div>
+
+            ${navHTML({ backDisabled: true, nextLabel: "Continue", nextDisabled: false })}
           </div>
-        </div>
-      `,
-      choices: ["Continue"]
-    };
+        `;
+        wireNav();
+        return;
+      }
 
-    // Radar page with Peraldus on same page
-    const page2_radar_with_peraldus = {
-      type: jsPsychHtmlKeyboardResponse,
-      stimulus: buildRadarHTML(4),
-      choices: "NO_KEYS",
-      data: { trial_tag: "sins_radar" },
-      on_load: () => {
-        const statusEl = document.getElementById("status");
-        const getVals = () => sins.map(s => Number(document.getElementById(s.id).value));
+      if (stepName === "radar") {
+        root.innerHTML = `
+          <div class="wrap">
+            <h2 style="margin-top:0;">SINSTATS</h2>
 
-        const ctx = document.getElementById("radarChart");
-        const chart = new Chart(ctx, {
-          type: "radar",
-          data: {
-            labels: sins.map(s => s.label),
-            datasets: [{ label: "You", data: getVals(), fill: true }]
-          },
-          options: {
-            responsive: true,
-            animation: false,
-            scales: { r: { min: 1, max: 7, ticks: { stepSize: 1 } } }
+            <img class="heroimg" src="Peraldus.png" alt="Peraldus Treatise on the Vices">
+            <div class="small">Summa de vitiis or "Treatise on the Vices" by the 13th-century Dominican friar William Peraldus</div>
+
+            <div style="height: 14px;"></div>
+
+            <div style="white-space: pre-wrap;">
+First things first, rate ur stats on each sin. 1 is low, 7 is high.
+            </div>
+
+            <div style="height: 10px;"></div>
+
+            <div style="display:flex; justify-content:center;">
+              <canvas id="radarChart" width="400" height="400"></canvas>
+            </div>
+
+            ${radarRowsHTML()}
+
+            <div id="radarErr" class="err" style="display:none;">Please set all seven values before continuing.</div>
+
+            ${navHTML({ backDisabled: false, nextLabel: "Continue", nextDisabled: false })}
+          </div>
+        `;
+
+        initRadarChart();
+        wireRadarInputs();
+        wireNav({
+          onNext: () => {
+            // Require all 7 set (you can loosen this if you actually want optional).
+            const allSet = SINS.every(s => Number.isInteger(state.radar[s.id]));
+            const err = document.getElementById("radarErr");
+            if (!allSet) {
+              err.style.display = "block";
+              return false;
+            }
+            err.style.display = "none";
+            return true;
+          }
+        });
+        return;
+      }
+
+      if (stepName === "slido") {
+        root.innerHTML = `
+          <div class="wrap">
+            <h2 style="margin-top:0;">Live envy poll</h2>
+
+            <div class="small" style="margin-bottom:10px;">
+              If the poll doesn’t load, open it here:
+              <a href="${esc(SLIDO_URL)}" target="_blank" rel="noopener noreferrer">Open Slido in a new tab</a>
+            </div>
+
+            <iframe
+              src="${esc(SLIDO_URL)}"
+              style="width:100%; min-height:720px; border:0; border-radius:12px;"
+              allow="clipboard-write; fullscreen"
+              loading="lazy"
+            ></iframe>
+
+            <div class="small" style="margin-top:10px;">
+              Note: going Back will re-render this page. Slido state may not persist.
+            </div>
+
+            ${navHTML({ backDisabled: false, nextLabel: "Continue", nextDisabled: false })}
+          </div>
+        `;
+        wireNav();
+        return;
+      }
+
+      if (stepName === "sun_moon_rising") {
+        root.innerHTML = `
+          <div class="wrap">
+            <img class="heroimg" src="ensor.png" alt="James Ensor, The Deadly Sins Dominated by Death">
+            <div class="small">
+              James Ensor, <em>The Deadly Sins Dominated by Death</em>, hand-coloured etching on Japanese paper, frontispiece to <em>The Deadly Sins</em>, ca. 1904
+            </div>
+
+            <div style="height: 10px;"></div>
+
+            <div style="white-space: pre-wrap;">
+The question that i believe sparked the party theme. Slightly different than just raw stats - we want to know what your sun moon and rising are for the seven deadly sins.
+
+SUN - Your core, your impulse, the thing that sheds light on everything else.
+MOON - Your emotional self.
+RISING - How people see and experience you.
+            </div>
+
+            <div style="height: 14px;"></div>
+
+            <div class="row">
+              <div class="lab"><span>SUN</span></div>
+              ${sinCheckboxGroup("sun", state.sun)}
+            </div>
+
+            <div class="row">
+              <div class="lab"><span>MOON</span></div>
+              ${sinCheckboxGroup("moon", state.moon)}
+            </div>
+
+            <div class="row">
+              <div class="lab"><span>RISING</span></div>
+              ${sinCheckboxGroup("rising", state.rising)}
+            </div>
+
+            ${navHTML({ backDisabled: false, nextLabel: "Continue", nextDisabled: false })}
+          </div>
+        `;
+
+        wireSMR();
+        wireNav();
+        return;
+      }
+
+      if (stepName === "who") {
+        root.innerHTML = `
+          <div class="wrap">
+            <h2 style="margin-top:0;">Who are you?</h2>
+            <p>Feel free to put your name for the game + our records.</p>
+
+            <textarea id="whoBox" placeholder="(optional)">${esc(state.who)}</textarea>
+
+            ${navHTML({ backDisabled: false, nextLabel: "Submit", nextDisabled: false })}
+            <div id="submitErr" class="err" style="display:none;"></div>
+            <div id="submitOk" class="ok" style="display:none;"></div>
+          </div>
+        `;
+
+        document.getElementById("whoBox").addEventListener("input", (e) => {
+          state.who = e.target.value;
+        });
+
+        wireNav({
+          onNext: async () => {
+            // Submit exactly once per participant (client-side).
+            if (hasSubmitted()) {
+              const err = document.getElementById("submitErr");
+              err.style.display = "block";
+              err.textContent = "This browser already submitted a response.";
+              return false;
+            }
+
+            const status = document.getElementById("status");
+            const err = document.getElementById("submitErr");
+            const ok = document.getElementById("submitOk");
+            err.style.display = "none";
+            ok.style.display = "none";
+
+            status.textContent = "Saving…";
+
+            const payload = {
+              stage: "final",
+              pride: state.radar.pride,
+              greed: state.radar.greed,
+              lust: state.radar.lust,
+              envy: state.radar.envy,
+              gluttony: state.radar.gluttony,
+              wrath: state.radar.wrath,
+              sloth: state.radar.sloth,
+              sun: state.sun.join("; "),
+              moon: state.moon.join("; "),
+              rising: state.rising.join("; "),
+              who: state.who || "",
+              all_trials_json: JSON.stringify({
+                radar: state.radar,
+                sun: state.sun,
+                moon: state.moon,
+                rising: state.rising,
+                who: state.who
+              })
+            };
+
+            try {
+              await postToSheets(payload);
+              markSubmitted();
+              state.submitted = true;
+              status.textContent = "Saved.";
+              ok.style.display = "block";
+              ok.textContent = "Saved. Thanks.";
+              return true;
+            } catch (e) {
+              console.error(e);
+              status.textContent = "";
+              err.style.display = "block";
+              err.textContent = "Save failed. Check console / Apps Script logs.";
+              return false;
+            }
           }
         });
 
-        function update() {
-          sins.forEach(s => {
-            document.getElementById(s.id + "_val").textContent = document.getElementById(s.id).value;
-          });
-          chart.data.datasets[0].data = getVals();
-          chart.update();
-        }
+        return;
+      }
 
-        sins.forEach(s => document.getElementById(s.id).addEventListener("input", update));
-        update();
+      if (stepName === "done") {
+        root.innerHTML = `
+          <div class="wrap">
+            <h2 style="margin-top:0;">Done</h2>
+            <p>You can close this tab.</p>
+            <p class="small">Participant ID: <code>${esc(getParticipantId())}</code></p>
+          </div>
+        `;
+        return;
+      }
+    }
 
-        // SAVE HERE (robust)
-        document.getElementById("submitBtn").addEventListener("click", async () => {
-          statusEl.textContent = "Saving…";
+    // =========================
+    // WIRING: NAV + INPUTS
+    // =========================
+    function wireNav(opts = {}) {
+      const backBtn = document.getElementById("backBtn");
+      const nextBtn = document.getElementById("nextBtn");
 
-          const payload = {};
-          sins.forEach(s => payload[s.id] = Number(document.getElementById(s.id).value));
-
-          // Save in jsPsych dataset
-          jsPsych.data.write({ trial_tag: "sins_radar", ...payload });
-
-          // Post to Google Sheets immediately
-          try {
-            await postToSheets({ stage: "radar", ...payload });
-            statusEl.textContent = "Saved.";
-          } catch (e) {
-            console.error("Radar save failed", e);
-            statusEl.textContent = "Save failed (check console).";
+      if (backBtn) {
+        backBtn.addEventListener("click", () => {
+          if (state.step > 0) {
+            state.step -= 1;
+            render();
           }
-
-          jsPsych.finishTrial(payload);
         });
       }
-    };
 
-   const SLIDO_URL = "https://app.sli.do/event/mVxRttUV7vKSqaJcFkjaNV/polls";
-// If this fails, try without /polls
+      if (nextBtn) {
+        nextBtn.addEventListener("click", async () => {
+          // optional per-step validation hook
+          if (opts.onNext) {
+            const ok = await opts.onNext();
+            if (!ok) return;
+          }
+          if (state.step < steps.length - 1) {
+            state.step += 1;
+            render();
+          }
+        });
+      }
+    }
 
-const page3_slido_embed = {
-  type: jsPsychHtmlKeyboardResponse,
-  choices: "NO_KEYS",
-  stimulus: `
-    <div class="wrap">
-      <h2 style="margin-top:0;">Live envy poll</h2>
+    function initRadarChart() {
+      const ctx = document.getElementById("radarChart");
+      if (!ctx) return;
 
-      <div class="small" style="margin-bottom:10px;">
-        If the poll doesn’t load, open it here:
-        <a href="${SLIDO_URL}" target="_blank" rel="noopener noreferrer">
-          Open Slido in a new tab
-        </a>
-      </div>
+      const dataArr = SINS.map(s => state.radar[s.id]); // nulls allowed
+      chart = new Chart(ctx, {
+        type: "radar",
+        data: {
+          labels: SINS.map(s => s.label),
+          datasets: [{
+            label: "You",
+            data: dataArr,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          animation: false,
+          spanGaps: false,
+          scales: {
+            r: {
+              min: 1,
+              max: 7,
+              ticks: { stepSize: 1 }
+            }
+          }
+        }
+      });
 
-      <iframe
-        src="${SLIDO_URL}"
-        style="width:100%; min-height:720px; border:0; border-radius:12px;"
-        allow="clipboard-write; fullscreen"
-        loading="lazy"
-      ></iframe>
+      updateRadarChart();
+    }
 
-      <div style="margin-top:16px; display:flex; justify-content:flex-end;">
-        <button id="continueBtn" type="button">Continue</button>
-      </div>
-    </div>
-  `,
-  on_load: () => {
-    document
-      .getElementById("continueBtn")
-      .addEventListener("click", () => {
-        jsPsych.finishTrial({
-          trial_tag: "slido_embed",
-          slido_url: SLIDO_URL
+    function updateRadarChart() {
+      if (!chart) return;
+      chart.data.datasets[0].data = SINS.map(s => state.radar[s.id]);
+      chart.update();
+    }
+
+    function wireRadarInputs() {
+      SINS.forEach(s => {
+        const radios = document.querySelectorAll(`input[type="radio"][name="${s.id}"]`);
+        radios.forEach(r => {
+          r.addEventListener("change", (e) => {
+            const v = Number(e.target.value);
+            state.radar[s.id] = v;
+            const valEl = document.getElementById(`${s.id}_val`);
+            if (valEl) valEl.textContent = String(v);
+            updateRadarChart();
+          });
+        });
+
+        // ensure the label display matches current state on render
+        const valEl = document.getElementById(`${s.id}_val`);
+        if (valEl) valEl.textContent = (state.radar[s.id] == null) ? "" : String(state.radar[s.id]);
+      });
+
+      updateRadarChart();
+    }
+
+    function wireSMR() {
+      ["sun", "moon", "rising"].forEach(group => {
+        const boxes = document.querySelectorAll(`input[type="checkbox"][name="${group}"]`);
+        boxes.forEach(b => {
+          b.addEventListener("change", () => {
+            const chosen = Array.from(document.querySelectorAll(`input[type="checkbox"][name="${group}"]:checked`))
+              .map(x => x.value);
+            state[group] = chosen;
+          });
         });
       });
-  }
-};
+    }
 
+    // =========================
+    // INIT jsPsych
+    // =========================
+    const jsPsych = initJsPsych({
+      display_element: "jspsych-target",
+    });
 
-    const page4_sun_moon_rising = {
-      type: jsPsychSurveyMultiSelect,
-      preamble: `
-        <div class="wrap">
-          <div style="height:8px;"></div>
-          <img class="heroimg" src="ensor.png" alt="James Ensor, The Deadly Sins Dominated by Death">
-          <div class="small">
-            James Ensor, <em>The Deadly Sins Dominated by Death</em>, hand-coloured etching on Japanese paper, frontispiece to <em>The Deadly Sins</em>, ca. 1904
-          </div>
-
-          <div style="height: 10px;"></div>
-
-The question that i believe sparked the party theme. Slightly different than just raw stats - we want to know what your sun moon and rising are for the seven deadly sins. Those of us on hinge know that sun moon and rising are the three essential star signs you must know in order to bag a quirked up shawty. Like a troll on the bridge, or a sphinx at the gate, the answer to this riddle may grant you passage forward. Feel free to double up, even triple up, on sins! these should affect each other and may be different based on configuration. e.g., a pride sun, greed moon, lust rising might be very different than a lust sun, pride moon, greed rising. If you're not sure just imagine a beautiful astrology lover in your mind and use your intuition.  <p>
-
-<b>SUN -</b> Your core, your impulse, the thing that sheds light on everything else. If everything else fell away, this is what would still be there. <br>
-<b>MOON - </b>Your emotional self. This is how your sin shows up when you are tired, lonely, being emo. <br>
-<b>RISING -</b> How people see and experience you, whether you mean it or not. It is the vibe you give off, the pattern people pick up on. <br>
-        </div>
-      `,
-      questions: [
-        { prompt: "SUN", name: "sun", options: SINS, required: false },
-        { prompt: "MOON", name: "moon", options: SINS, required: false },
-        { prompt: "RISING", name: "rising", options: SINS, required: false }
-      ],
-      button_label: "Continue",
-      data: { trial_tag: "sun_moon_rising" },
-      on_finish: async (data) => {
-        try {
-          await postToSheets({
-            stage: "sun_moon_rising",
-            sun: (data.response.sun || []).join("; "),
-            moon: (data.response.moon || []).join("; "),
-            rising: (data.response.rising || []).join("; ")
-          });
-        } catch (e) {
-          console.error("SMR save failed", e);
-        }
-      }
-    };
-
-    const page5_demogs = {
-      type: jsPsychSurveyText,
-      preamble: `
-        <div class="wrap">
-Who are you? Feel free to put your name for game + our records.
-        </div>
-      `,
-      questions: [
-        { prompt: "", name: "who", required: false, rows: 5, columns: 70 }
-      ],
-      button_label: "Finish",
-      data: { trial_tag: "who_are_you" },
-      on_finish: async (data) => {
-        try {
-          await postToSheets({
-            stage: "who",
-            who: data.response.who || ""
-          });
-        } catch (e) {
-          console.error("Who save failed", e);
-        }
-      }
-    };
-
-    const done = {
-      type: jsPsychHtmlButtonResponse,
+    const wizardTrial = {
+      type: jsPsychHtmlKeyboardResponse,
+      choices: "NO_KEYS",
       stimulus: `
-        <div class="wrap">
-          <h2 style="margin-top:0;">Done</h2>
-          <p>You can close this tab.</p>
-        </div>
+        <div id="wizardRoot"></div>
       `,
-      choices: ["Close"]
+      on_load: () => {
+        render();
+      },
+      on_finish: () => {
+        // write whatever we have into jsPsych data as well (even though we only submit once)
+        jsPsych.data.write({
+          participant_id: getParticipantId(),
+          submitted_flag: hasSubmitted() ? 1 : 0,
+          radar: JSON.stringify(state.radar),
+          sun: state.sun.join("; "),
+          moon: state.moon.join("; "),
+          rising: state.rising.join("; "),
+          who: state.who || ""
+        });
+      }
     };
 
-    jsPsych.run([
-  page1_intro,
-  page2_radar_with_peraldus,
-  page3_slido_embed,
-  page4_sun_moon_rising,
-  page5_demogs,
-  done
-]);
+    jsPsych.run([wizardTrial]);
   </script>
 </body>
 </html>
