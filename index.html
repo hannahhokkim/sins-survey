@@ -114,7 +114,6 @@
 
       // attach approximate location
       const loc = await getApproxLocation();
-      payload.country = loc.country;
       payload.region = loc.region;
 
       // Use text/plain to avoid CORS preflight hassles
